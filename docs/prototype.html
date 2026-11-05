@@ -1,0 +1,708 @@
+<title>Tay Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a sidebar of environments and their chats; each chat opens a workspace of rounded, softly frosted panes,
+   and every pane holds tabs (Chat, Diff, Code, Neovim, Terminal). One pane with tabs, or split panes side by side. */
+:root{
+  color-scheme: dark;
+  /* Catppuccin Mocha: crust #11111B, mantle #181825, base #1E1E2E, surface0 #313244, surface1 #45475A */
+  --frame:#11111B; --pane:rgba(24,24,37,.84); --pane-2:rgba(49,50,68,.45); --raised:rgba(69,71,90,.6);
+  --line:rgba(108,112,134,.24); --line-2:rgba(147,153,178,.32);
+  --fg:#CDD6F4; --muted:#BAC2DE; --dim:#9399B2;
+  --accent:#CBA6F7; --accent-fg:#11111B; --accent-bg:rgba(203,166,247,.15); --accent-line:rgba(203,166,247,.5);
+  --blue:#89B4FA; --green:#A6E3A1; --purple:#CBA6F7; --yellow:#F9E2AF; --orange:#FAB387; --teal:#94E2D5; --pink:#F5C2E7;
+  --add-bg:rgba(166,227,161,.12); --add-fg:#D5F1D2; --add-num:#A6E3A1;
+  --del-bg:rgba(243,139,168,.13); --del-fg:#F8CEDA; --del-num:#F38BA8;
+  --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans:'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --r:12px; --sheet:rgba(30,30,46,.92);
+}
+*{box-sizing:border-box}
+html,body{background:var(--frame);color:var(--fg)}
+body{font-family:var(--mono);font-size:13px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 20px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.mono{font-family:var(--mono)}
+.grow{flex:1 1 auto}
+.ambient{position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+  radial-gradient(38% 40% at 10% 8%, rgba(203,166,247,.16), transparent 70%),
+  radial-gradient(40% 45% at 92% 12%, rgba(137,180,250,.15), transparent 70%),
+  radial-gradient(45% 40% at 55% 100%, rgba(245,194,231,.10), transparent 70%), var(--frame)}
+.glass{background:var(--pane);-webkit-backdrop-filter:blur(28px) saturate(150%);backdrop-filter:blur(28px) saturate(150%);
+  border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 14px 40px rgba(0,0,0,.4)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){ .glass{background:#181825} }
+.shell{max-width:1560px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.ib{width:32px;height:32px;border-radius:8px;border:0;background:transparent;color:var(--dim);display:grid;place-items:center;flex:none}
+.ib:hover{background:var(--raised);color:var(--fg)}
+.ib[aria-expanded="true"]{background:var(--raised);color:var(--fg)}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;padding-right:6px}
+.crumb{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 200px}
+.crumb b{color:var(--fg);font-weight:500}
+.seg{display:flex;gap:2px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:8px;padding:2px}
+.seg button{border:0;background:transparent;color:var(--muted);border-radius:6px;padding:4px 10px;font-size:12px;display:flex;gap:6px;align-items:center;min-height:28px}
+.seg button[aria-pressed="true"]{background:var(--raised);color:var(--fg);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.agentstat{font-size:12px;color:var(--muted);display:flex;gap:7px;align-items:center;padding:0 6px;white-space:nowrap}
+
+/* ---------- app grid ---------- */
+.app{display:grid;grid-template-columns:268px minmax(0,1fr);gap:8px;height:clamp(640px, calc(100vh - 100px), 1000px)}
+.app.nosb{grid-template-columns:minmax(0,1fr)}
+.app.nosb .sidebar{display:none}
+.scrim{display:none}
+
+/* ---------- sidebar ---------- */
+.sidebar{border-radius:var(--r);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.sb-head{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+.newchat{display:flex;align-items:center;gap:8px;justify-content:center;border:1px solid var(--line-2);background:rgba(255,255,255,.05);border-radius:9px;min-height:36px;font-size:12.5px;color:var(--fg)}
+.newchat:hover{background:rgba(255,255,255,.09)}
+.sb-search{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--dim)}
+.sb-search input{flex:1;min-width:0;background:transparent;border:0;color:var(--fg);font:inherit;font-size:12.5px;padding:8px 0}
+.sb-search input:focus{outline:none}
+.sb-list{flex:1;overflow-y:auto;padding:8px 6px;display:flex;flex-direction:column;gap:14px}
+.env{display:flex;flex-direction:column;gap:2px}
+.env-h{display:flex;align-items:center;gap:8px;padding:2px 4px 4px 8px}
+.env-h .nm{font-size:12.5px;font-weight:600;color:var(--fg)}
+.env-h .where{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.env-h .ib{width:26px;height:26px;margin-left:auto}
+.ico{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#11111B;flex:none}
+.chatbtn{display:grid;grid-template-columns:10px minmax(0,1fr);column-gap:10px;align-items:center;width:100%;text-align:left;border:0;background:transparent;border-radius:8px;padding:7px 9px;color:var(--muted)}
+.chatbtn:hover{background:rgba(255,255,255,.04)}
+.chatbtn[aria-current="true"]{background:rgba(255,255,255,.085);color:var(--fg);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.chatbtn .ttl{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chatbtn .meta{grid-column:2;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd{width:8px;height:8px;border-radius:4px;flex:none}
+.sd.working{background:var(--blue)}
+.sd.needs{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.sd.done{background:var(--green)}
+.sd.idle{border:1.5px solid var(--dim)}
+.sb-foot{padding:9px 12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);display:flex;gap:8px;align-items:center}
+.live{width:7px;height:7px;border-radius:4px;background:var(--green);box-shadow:0 0 6px var(--green);flex:none}
+
+/* ---------- workspace and panes ---------- */
+.ws{display:flex;gap:8px;min-width:0;min-height:0}
+.pane{flex:1 1 0;border-radius:var(--r);display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;position:relative;transition:border-color .15s}
+.pane.focus{border-color:var(--accent-line)}
+.pane.glass{background:rgba(24,24,37,.9)}
+.tabstrip{display:flex;align-items:flex-end;gap:6px;padding:6px 6px 0 2px;flex:none}
+.tabs{display:flex;align-items:flex-end;gap:2px;overflow-x:auto;min-width:0;flex:1 1 auto;scrollbar-width:none;padding:0 10px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{position:relative;display:flex;align-items:center;height:28px;margin-bottom:3px;border-radius:8px;color:var(--muted);flex:none;transition:background .15s}
+.tab:not(.on):hover{background:rgba(255,255,255,.045);color:var(--fg)}
+.tab.on{height:33px;margin-bottom:0;border-radius:10px 10px 0 0;background:var(--sheet);color:var(--fg);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.tab.on::before,.tab.on::after{content:"";position:absolute;bottom:0;width:10px;height:10px;pointer-events:none}
+.tab.on::before{left:-10px;background:radial-gradient(circle at 0 0, transparent 9.5px, var(--sheet) 10px)}
+.tab.on::after{right:-10px;background:radial-gradient(circle at 100% 0, transparent 9.5px, var(--sheet) 10px)}
+.pane:not(.focus) .tab.on{color:var(--muted)}
+.tl{display:flex;align-items:center;gap:7px;border:0;background:transparent;height:100%;padding:0 4px 0 10px;font-size:12.5px;white-space:nowrap;color:inherit;border-radius:9px}
+.tl span{max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.tab .x{opacity:0;transition:opacity .12s}
+.tab.on .x,.tab:hover .x,.tab .x:focus-visible{opacity:1}
+.addtab{width:28px;height:28px;border-radius:8px;margin:0 0 3px 6px}
+.tl svg{color:var(--dim)} .tab.on .tl svg{color:var(--accent)}
+.x{width:22px;height:22px;margin-right:5px;border-radius:5px;display:grid;place-items:center;color:var(--dim);border:0;background:transparent}
+.x:hover{background:var(--raised);color:var(--fg)}
+.pacts{display:flex;gap:1px;flex:none;margin-bottom:2px}
+.pacts .ib{width:30px;height:30px}
+.addmenu{position:absolute;right:8px;top:42px;z-index:6;min-width:200px;padding:6px;border-radius:10px;display:flex;flex-direction:column;gap:2px;background:rgba(49,50,68,.96);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid var(--line-2);box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.addmenu button{display:flex;align-items:center;gap:10px;border:0;background:transparent;border-radius:7px;padding:8px 10px;font-size:12.5px;text-align:left;color:var(--fg)}
+.addmenu button:hover{background:var(--raised)}
+.addmenu .none{padding:8px 10px;color:var(--dim);font-size:12px}
+.pbody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--sheet)}
+.empty{margin:auto;text-align:center;color:var(--muted);font-family:var(--sans);font-size:14px;padding:28px;max-width:38ch;display:flex;flex-direction:column;gap:8px;align-items:center}
+.empty b{color:var(--fg);font-weight:600}
+
+/* ---------- code ---------- */
+.codebar{display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);flex-wrap:wrap;flex:none}
+.codebody{flex:1 1 auto;display:flex;min-height:0}
+.side{width:180px;flex:none;border-right:1px solid var(--line);padding:8px 6px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;font-size:12.5px}
+.side.right{border-right:0;border-left:1px solid var(--line);width:190px}
+.side .item{display:flex;gap:8px;padding:6px 8px;border-radius:7px;color:var(--muted);background:none;border:0;text-align:left;width:100%;font-size:12px}
+.side .item[aria-current="true"]{background:var(--raised);color:var(--fg)}
+.side h3{margin:12px 8px 6px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:500}
+.scroll{flex:1 1 auto;overflow:auto;padding:8px 0;min-width:0}
+.ln{display:flex;font-family:var(--mono);font-size:13px;line-height:22px;white-space:pre;min-width:max-content;padding-right:16px;width:100%;border:0;background:none;text-align:left;color:var(--fg)}
+button.ln:hover{background:rgba(255,255,255,.05)}
+.num{width:46px;flex:none;text-align:right;padding-right:12px;color:var(--dim);user-select:none}
+.ln.add{background:var(--add-bg);color:var(--add-fg)}.ln.add .num{color:var(--add-num)}
+.ln.del{background:var(--del-bg);color:var(--del-fg)}.ln.del .num{color:var(--del-num)}
+.ln.hl{background:rgba(255,255,255,.07)}
+.ln.marked{box-shadow:inset 3px 0 0 var(--accent)}
+.k{color:var(--purple)}.f{color:var(--blue)}.ty{color:var(--yellow)}.c{color:var(--dim);font-style:italic}.n{color:var(--orange)}.s{color:var(--green)}.m{color:var(--teal)}
+.cbox{margin:6px 16px 10px 58px;background:rgba(203,166,247,.07);border:1px solid var(--accent-line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;font-family:var(--sans);max-width:560px}
+.cbox .meta{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;font-family:var(--mono)}
+.cbox .meta b{color:var(--fg);font-weight:500}
+.cbox textarea{width:100%;min-height:64px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:8px;color:var(--fg);font:inherit;font-size:14px;padding:8px;resize:vertical}
+.cbox .acts{display:flex;gap:8px;flex-wrap:wrap}
+.cbox .text{font-size:14px;line-height:1.55}
+.tag{font-size:11px;border-radius:999px;padding:1px 8px;background:var(--accent-bg);color:var(--accent)}
+.tag.sent{background:rgba(137,180,250,.15);color:var(--blue)}
+.peek{margin:6px 16px 10px 58px;background:rgba(255,255,255,.04);border:1px solid var(--line-2);border-radius:10px;overflow:hidden;max-width:620px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.peek .head{display:flex;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);flex-wrap:wrap}
+.peek .head b{color:var(--fg);font-weight:500}
+.peek .body{padding:6px 0;overflow-x:auto}
+.tok{background:none;border:0;padding:0;font:inherit;color:inherit;border-bottom:1px dashed var(--blue);cursor:pointer}
+.status{display:flex;align-items:center;gap:12px;padding:4px 10px 4px 4px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-wrap:wrap;flex:none;background:rgba(0,0,0,.18)}
+.mode{color:var(--accent-fg);padding:1px 8px;border-radius:5px;font-weight:600;font-size:11.5px}
+.banner{background:rgba(203,166,247,.07);border:1px solid var(--accent-line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:4px;font-size:13.5px;font-family:var(--sans)}
+.banner b{color:var(--accent);font-weight:600;font-size:12.5px;font-family:var(--mono)}
+.editor{flex:1 1 auto;display:flex;min-height:0;overflow:auto}
+.editor .nums{flex:none;padding:8px 0;font-size:13px;line-height:22px;color:var(--dim);text-align:right;width:46px;padding-right:12px;user-select:none;white-space:pre}
+.editor textarea{flex:1 1 auto;min-width:0;background:transparent;border:0;color:var(--fg);font-family:var(--mono);font-size:13px;line-height:22px;padding:8px 12px 8px 4px;resize:none;white-space:pre;overflow:hidden;tab-size:4}
+.editor textarea:focus{outline:none}
+.primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:8px;padding:8px 14px;font-weight:600;font-size:12.5px;min-height:36px;box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 4px 14px rgba(203,166,247,.25)}
+.ghost{background:rgba(255,255,255,.05);border:1px solid var(--line-2);border-radius:8px;padding:7px 12px;font-size:12.5px;min-height:34px}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);font-size:12.5px;text-decoration:underline;text-underline-offset:2px}
+
+/* ---------- chat ---------- */
+.msgs{flex:1 1 auto;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:18px;font-family:var(--sans);font-size:14.5px;line-height:1.62;min-height:0}
+.msg{display:flex;flex-direction:column;gap:10px;min-width:0}
+.msg p{margin:0}
+.msg ul,.msg ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+.msg code{font-size:12.5px;background:rgba(255,255,255,.07);padding:1px 5px;border-radius:5px}
+.msg.user{align-self:flex-end;max-width:86%;background:rgba(255,255,255,.065);border:1px solid var(--line);border-radius:12px 12px 4px 12px;padding:9px 13px}
+.who{font-family:var(--mono);font-size:11.5px;color:var(--dim);display:flex;gap:8px;align-items:center}
+.who i{width:6px;height:6px;border-radius:3px;background:var(--accent);display:inline-block}
+.quote{border-left:2px solid var(--accent-line);padding-left:10px;font-size:13.5px;color:var(--muted)}
+.block{border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.26);overflow:hidden}
+.block-head{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 12px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.block pre{margin:0;padding:12px 14px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--fg)}
+.dg{overflow-x:auto;padding:10px 8px}
+.dg svg{display:block;width:100%;min-width:480px;height:auto}
+.dg-box{fill:rgba(255,255,255,.045);stroke:var(--line-2);stroke-width:1.2}
+.dg-hot{fill:var(--accent-bg);stroke:var(--accent-line);stroke-width:1.2}
+.dg-t{fill:var(--fg);font:600 13px var(--mono)}
+.dg-s{fill:var(--muted);font:11px var(--mono)}
+.dg-l{fill:var(--dim);font:10.5px var(--mono)}
+.dg-a{stroke:var(--dim);fill:none;stroke-width:1.4}
+.dg-ah{fill:var(--dim)}
+.tool{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px;flex-wrap:wrap;font-family:var(--mono)}
+.dot{width:7px;height:7px;border-radius:4px;background:var(--green);flex:none}
+.plus{color:var(--add-num)}.minus{color:var(--del-num)}
+.typing{color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+.composer{padding:10px 12px 4px;flex:none}
+.composer form{background:rgba(0,0,0,.24);border:1px solid var(--line-2);border-radius:12px;padding:9px 12px;display:flex;flex-direction:column;gap:7px}
+.composer label{font-size:11.5px;color:var(--dim)}
+.composer .in{display:flex;gap:8px;align-items:center}
+.composer .in span{color:var(--accent);font-weight:700}
+.composer input{background:transparent;border:0;color:var(--fg);font:inherit;font-size:13.5px;padding:4px 0;width:100%}
+.composer input:focus{outline:none}
+.composer .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-size:11.5px;color:var(--accent);background:var(--accent-bg);border-radius:6px;padding:3px 8px}
+.cstat{display:flex;flex-wrap:wrap;gap:3px 14px;padding:4px 16px 10px;font-size:11.5px;color:var(--dim);flex:none}
+.cstat b{color:var(--muted);font-weight:500}
+.meter{display:inline-block;width:46px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);vertical-align:middle;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--green)}
+
+/* ---------- terminal ---------- */
+.term{flex:1 1 auto;overflow:auto;padding:10px 14px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;min-height:0}
+.term .pr{color:var(--green)}.term .br{color:var(--accent)}.term .ok{color:var(--green)}.term .mu{color:var(--dim)}
+.termin{display:flex;gap:8px;align-items:center;padding:0 14px 12px;flex:none}
+.termin label{color:var(--green);white-space:nowrap;font-size:12.5px}
+.termin label b{color:var(--accent);font-weight:400}
+.termin input{flex:1;min-width:0;background:transparent;border:0;color:var(--fg);font:inherit;font-size:12.5px;caret-color:var(--accent)}
+.termin input:focus{outline:none}
+
+.hints{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--dim);font-size:12px;padding:2px 4px}
+.hints kbd{font-family:var(--mono);font-size:11.5px;background:var(--pane-2);border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--fg)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(49,50,68,.92);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid var(--line-2);color:var(--fg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:40;max-width:calc(100% - 32px);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+
+@media (max-width: 900px){
+  .app,.app.nosb{grid-template-columns:minmax(0,1fr);height:auto}
+  .sidebar,.app.nosb .sidebar{display:none;position:fixed;left:0;top:0;bottom:0;width:min(310px,86vw);z-index:30;border-radius:0 14px 14px 0;
+    padding-left:env(safe-area-inset-left,0px);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:rgba(24,24,37,.97)}
+  .app.sbopen .sidebar{display:flex}
+  .app.sbopen .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
+  .ws{flex-direction:column}
+  .pane{flex:none;min-height:540px}
+  .msgs{overflow:visible}
+  .codebody{flex-direction:column}
+  .side,.side.right{width:100%;flex-direction:row;overflow-x:auto;border:0;border-bottom:1px solid var(--line);padding:6px;flex:none}
+  .side.right{border-top:1px solid var(--line);border-bottom:0}
+  .side .item{width:auto;white-space:nowrap}
+  .side h3{display:none}
+  .cbox,.peek{margin-left:16px}
+  .editor{min-height:420px}
+  .agentstat span{display:none}
+}
+</style>
+
+<div class="ambient" aria-hidden="true"></div>
+<div class="shell">
+  <header class="topbar glass">
+    <button class="ib" id="sbToggle" aria-label="Show or hide the sidebar" aria-expanded="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></button>
+    <div class="brand"><svg width="20" height="20" viewBox="0 0 512 512" aria-hidden="true"><rect x="16" y="16" width="480" height="480" rx="112" fill="#17224F"></rect><path d="M40 176 C 190 120, 310 196, 256 266 S 300 430, 476 362" fill="none" stroke="#F4AA47" stroke-width="66" stroke-linecap="round"></path></svg>Tay</div>
+    <div class="crumb" id="crumb"></div>
+    <div class="seg" role="group" aria-label="Layout">
+      <button id="presetTabs" aria-pressed="false">Tabs</button>
+      <button id="presetSplit" aria-pressed="true">Split</button>
+    </div>
+    <span class="agentstat" id="agentstat"></span>
+  </header>
+
+  <div class="app" id="app">
+    <aside class="sidebar glass" aria-label="Environments and chats">
+      <div class="sb-head">
+        <button class="newchat" id="newChat"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg>New chat in tay</button>
+        <div class="sb-search"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg><label for="sbFilter" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Filter chats</label><input id="sbFilter" type="search" placeholder="Filter chats" autocomplete="off"></div>
+      </div>
+      <div class="sb-list" id="sbList"></div>
+      <div class="sb-foot"><span class="live"></span><span id="sbFoot"></span></div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+    <main class="ws" id="ws" aria-label="Chat workspace"></main>
+  </div>
+
+  <div class="hints">
+    <span><kbd>Click a tab</kbd> switch</span><span><kbd>+</kbd> add a tab</span><span><kbd>⇄</kbd> move a tab between panes</span><span><kbd>▥</kbd> split</span>
+    <span>In the app: <kbd>gt</kbd> next tab · <kbd>Ctrl-w v</kbd> split · <kbd>Ctrl-w h/l</kbd> move focus</span><span>Replies are scripted</span>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(function(){
+  const $ = (s, r=document) => r.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const narrow = () => window.matchMedia('(max-width: 900px)').matches;
+  const svg = d => `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICON = {
+    chat: svg('<path d="M3 3.5h10a1 1 0 011 1v6a1 1 0 01-1 1H7l-3 2.5v-2.5H3a1 1 0 01-1-1v-6a1 1 0 011-1z"/>'),
+    diff: svg('<path d="M5 2.5v6M2 5.5h6M9 12h5"/>'),
+    code: svg('<path d="M5.5 4L2 8l3.5 4M10.5 4L14 8l-3.5 4"/>'),
+    nvim: svg('<path d="M3.5 13V3l9 10V3"/>'),
+    term: svg('<path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/>'),
+    x: svg('<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'),
+    plus: svg('<path d="M8 3v10M3 8h10"/>'),
+    split: svg('<rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M8 2.5v11"/>'),
+    move: svg('<path d="M2.5 5.5h10l-2.5-2.5M13.5 10.5h-10l2.5 2.5"/>')
+  };
+  const KIND = { chat:'Chat', diff:'Diff', code:'Code', nvim:'Neovim', term:'Terminal' };
+  const ORDER = ['chat','diff','code','nvim','term'];
+
+  /* ---------- rich content for the main chat ---------- */
+  const diagram = `
+    <div class="block">
+      <div class="block-head"><span>mermaid · rendered by tayd</span><span class="grow"></span><button class="linkbtn" data-src-toggle>Show source</button></div>
+      <div class="dg" data-dg>
+        <svg viewBox="0 0 560 230" role="img" aria-label="Diagram: the tay client talks to the tayd daemon over a JSON API; tayd talks to Neovim, Claude Code and git">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="dg-ah"></path></marker></defs>
+          <rect x="16" y="85" width="124" height="56" rx="10" class="dg-box"></rect>
+          <text x="78" y="109" text-anchor="middle" class="dg-t">tay</text><text x="78" y="127" text-anchor="middle" class="dg-s">GPU client</text>
+          <rect x="218" y="85" width="124" height="56" rx="10" class="dg-hot"></rect>
+          <text x="280" y="109" text-anchor="middle" class="dg-t">tayd</text><text x="280" y="127" text-anchor="middle" class="dg-s">daemon</text>
+          <rect x="420" y="20" width="124" height="44" rx="10" class="dg-box"></rect><text x="482" y="47" text-anchor="middle" class="dg-t">Neovim</text>
+          <rect x="420" y="93" width="124" height="44" rx="10" class="dg-box"></rect><text x="482" y="120" text-anchor="middle" class="dg-t">Claude Code</text>
+          <rect x="420" y="166" width="124" height="44" rx="10" class="dg-box"></rect><text x="482" y="193" text-anchor="middle" class="dg-t">git + watcher</text>
+          <path d="M142 113H216" class="dg-a" marker-start="url(#ah)" marker-end="url(#ah)"></path>
+          <text x="179" y="103" text-anchor="middle" class="dg-l">JSON API</text><text x="179" y="133" text-anchor="middle" class="dg-l">unix socket</text>
+          <path d="M342 104C382 104 380 42 418 42" class="dg-a" marker-end="url(#ah)"></path>
+          <path d="M342 113H418" class="dg-a" marker-end="url(#ah)"></path>
+          <path d="M342 122C382 122 380 188 418 188" class="dg-a" marker-end="url(#ah)"></path>
+          <text x="381" y="34" text-anchor="middle" class="dg-l">msgpack-rpc</text>
+          <text x="381" y="107" text-anchor="middle" class="dg-l">ACP</text>
+          <text x="381" y="206" text-anchor="middle" class="dg-l">fs + git</text>
+        </svg>
+      </div>
+      <pre data-src hidden>flowchart LR
+  tay[tay · GPU client] &lt;--&gt;|JSON API| tayd[tayd · daemon]
+  tayd --&gt;|msgpack-rpc| nvim[Neovim]
+  tayd --&gt;|ACP| agent[Claude Code]
+  tayd --&gt;|fs + git| repo[git + watcher]</pre>
+    </div>`;
+  const rustBlock = `
+    <div class="block">
+      <div class="block-head"><span>rust · protocol/src/lib.rs</span><span class="grow"></span><button class="linkbtn" data-copy>Copy</button></div>
+<pre><span class="m">#[derive(Serialize, Deserialize, JsonSchema)]</span>
+<span class="m">#[serde(tag = <span class="s">"method"</span>, content = <span class="s">"params"</span>)]</span>
+<span class="k">pub enum</span> <span class="ty">Request</span> {
+    <span class="ty">SessionList</span>,
+    <span class="ty">FileOpen</span> { path: <span class="ty">PathBuf</span> },
+    <span class="ty">ReviewComment</span> { file: <span class="ty">PathBuf</span>, line: <span class="ty">u32</span>, body: <span class="ty">String</span> },
+}</pre>
+    </div>`;
+  const P = env => `<span class="pr">${env}</span> <span class="br">git:(main)</span> ❯ `;
+
+  /* ---------- data ---------- */
+  const envs = [
+    { id:'tay', name:'tay', where:'~/Dev/tay · this machine', color:'var(--orange)', letter:'T' },
+    { id:'site', name:'tay-site', where:'~/Dev/tay-site · this machine', color:'var(--pink)', letter:'S' },
+    { id:'box', name:'rust-sandbox', where:'devbox · over Tailscale', color:'var(--green)', letter:'R' }
+  ];
+  let seq = 0;
+  const mkLayout = (panes, focus) => ({ panes, focus });
+  const sessions = [
+    { id:'resize', env:'tay', title:'Keyboard pane resizing', status:'needs', meta:'Needs your review · 2m', demo:true, ctx:31,
+      layout: mkLayout([{ tabs:['chat'], active:'chat' }, { tabs:['diff','code','nvim','term'], active:'diff' }], 1),
+      term:[P('tay') + 'cargo test pane::','<span class="mu">   Compiling tay-client v0.1.0 (~/Dev/tay/crates/client)</span>','<span class="mu">    Finished test profile in 3.41s</span>','running 14 tests','test result: <span class="ok">ok</span>. 14 passed; 0 failed'],
+      msgs:[
+        { role:'user', html:'<p>Before we start: how will the app and the daemon talk to each other?</p>' },
+        { role:'agent', html:'<p>The GPU client never touches processes itself. Everything goes through <code>tayd</code>, which owns Neovim, the agent and the repo, and keeps them running when the window closes.</p>' + diagram + '<p>Requests are plain Rust types, so the JSON Schema behind <code>tay api describe</code> comes for free:</p>' + rustBlock },
+        { role:'user', html:'<p>Make the review pane resizable from the keyboard. <code>Ctrl-w &lt;</code> and <code>&gt;</code> like Vim, and remember the split per workspace.</p>' },
+        { role:'agent', html:'<p>Done. The split ratio now lives on <code>Workspace</code> and is saved with the session.</p><ul><li>Added <code>resize_split</code>, clamped to 20–80%</li><li>Bound <code>&lt;C-w&gt;&lt;</code> and <code>&lt;C-w&gt;&gt;</code> in the keymap</li><li>Saved the ratio in <code>session.toml</code></li></ul>', tools:[{ label:'Edited 3 files', add:38, del:12, open:'diff' },{ label:'cargo test pane::', note:'14 passed' }] }
+      ] },
+    { id:'proto', env:'tay', title:'Protocol crate and tay api', status:'done', meta:'Done · 1h', ctx:18,
+      layout: mkLayout([{ tabs:['chat','term'], active:'chat' }], 0),
+      msgs:[
+        { role:'user', html:'<p>Set up the protocol crate with <code>session.list</code>, <code>file.open</code> and <code>review.comment</code>, plus a <code>tay api</code> CLI to call them.</p>' },
+        { role:'agent', html:'<p>Done. The protocol crate defines each method as a Rust type and generates its JSON Schema with <code>schemars</code>. <code>tay api list</code>, <code>describe</code> and <code>call</code> all talk to the daemon over the socket.</p>', tools:[{ label:'Created crates/protocol', add:212, del:0 },{ label:'cargo test -p protocol', note:'6 passed' }] }
+      ] },
+    { id:'glass', env:'tay', title:'Glass blur shader spike', status:'working', meta:'Working · writing blur.wgsl', ctx:44, typing:true,
+      layout: mkLayout([{ tabs:['chat','term'], active:'chat' }], 0),
+      msgs:[
+        { role:'user', html:'<p>Spike a frosted-glass pane: blur whatever is behind it in a WGSL shader.</p>' },
+        { role:'agent', html:'<p>Plan: render the background to a texture, run a two-pass Gaussian blur (horizontal then vertical) at half resolution, then draw the pane as a rounded rectangle that samples the blurred texture and adds a thin top highlight.</p><ol><li>Offscreen render target</li><li>Two blur passes</li><li>Rounded-rectangle shader with a signed distance field</li></ol>' }
+      ] },
+    { id:'copy', env:'site', title:'Landing page copy', status:'idle', meta:'Idle · yesterday', ctx:9,
+      layout: mkLayout([{ tabs:['chat'], active:'chat' }], 0),
+      msgs:[
+        { role:'user', html:'<p>Draft three one-line pitches for the landing page.</p>' },
+        { role:'agent', html:'<ol><li>A GPU-native home for you, your agent and Neovim.</li><li>Stay in flow: chat, review and edit without leaving the keyboard.</li><li>Named after the river. Built for people who live in the terminal.</li></ol>' }
+      ] },
+    { id:'wgpu', env:'box', title:'Learn Wgpu: chapter 4', status:'done', meta:'Done · Mon', ctx:22,
+      layout: mkLayout([{ tabs:['chat','term'], active:'chat' }], 0),
+      msgs:[
+        { role:'user', html:'<p>Explain bind groups like I\'m halfway through the Rust Book.</p>' },
+        { role:'agent', html:'<p>A bind group is a bundle of resources a shader can read, like a texture and its sampler. You describe its shape once with a <em>layout</em>, then build groups that match it. Swapping a whole bundle with one <code>set_bind_group</code> call is cheaper than rebinding each resource.</p>' }
+      ] }
+  ];
+  sessions.forEach(s => { if (!s.term) s.term = [P(envOf(s).name) + 'tayd status', 'tayd running · 1 client attached']; s.draft = ''; });
+  function envOf(s){ return envs.find(e => e.id === s.env); }
+
+  const demo = {
+    openLine:null, peek:true, loc:'ui/tabs.rs:77', jumps:['pane/layout.rs:48','pane/layout.rs:42','ui/tabs.rs:77'], editing:false, handedBack:false,
+    comments:[{ line:48, text:"Pull 0.2 / 0.8 into consts. I'll want a config option for min pane width later.", status:'pending' }]
+  };
+  let curId = 'resize';
+  const cur = () => sessions.find(s => s.id === curId);
+  const pending = () => demo.comments.filter(c => c.status === 'pending');
+
+  /* ---------- sidebar ---------- */
+  function renderSidebar(){
+    const q = $('#sbFilter').value.trim().toLowerCase();
+    $('#sbList').innerHTML = envs.map(e => {
+      const list = sessions.filter(s => s.env === e.id && (!q || s.title.toLowerCase().includes(q)));
+      if (q && !list.length) return '';
+      return `<div class="env"><div class="env-h"><span class="ico" style="background:${e.color}">${e.letter}</span><span style="min-width:0;display:flex;flex-direction:column"><span class="nm">${e.name}</span><span class="where">${e.where}</span></span><button class="ib" data-newin="${e.id}" aria-label="New chat in ${e.name}">${ICON.plus}</button></div>
+        ${list.map(s => `<button class="chatbtn" data-open="${s.id}" aria-current="${s.id===curId}"><span class="sd ${s.status}" aria-hidden="true"></span><span class="ttl">${esc(s.title)}</span><span class="meta">${esc(s.meta)}</span></button>`).join('')}</div>`;
+    }).join('') || '<div class="empty" style="margin:20px auto">No chats match that filter.</div>';
+    const working = sessions.filter(s => s.status === 'working').length, needs = sessions.filter(s => s.status === 'needs').length;
+    $('#sbFoot').textContent = `tayd · ${sessions.length} chats · ${working} working · ${needs} need you`;
+    $('#agentstat').innerHTML = `<span class="sd ${needs?'needs':'working'}"></span><span>${needs} need${needs===1?'s':''} you · ${working} working</span>`;
+  }
+  $('#sbList').addEventListener('click', e => {
+    const o = e.target.closest('[data-open]');
+    if (o){ curId = o.dataset.open; closeDrawer(); renderAll(); return; }
+    const n = e.target.closest('[data-newin]');
+    if (n) newChat(n.dataset.newin);
+  });
+  $('#sbFilter').addEventListener('input', renderSidebar);
+  $('#newChat').onclick = () => newChat(cur().env);
+  function newChat(envId){
+    const s = { id:'n' + (++seq), env:envId, title:'New chat', status:'idle', meta:'Idle · just now', ctx:0, msgs:[], draft:'',
+      layout: mkLayout([{ tabs:['chat'], active:'chat' }, { tabs:['term'], active:'term' }], 0) };
+    s.term = [P(envOf(s).name) + 'pwd', envOf(s).where.split(' · ')[0]];
+    sessions.push(s); curId = s.id; closeDrawer(); renderAll();
+    setTimeout(() => { const i = document.getElementById('ci-' + s.id); if (i) i.focus(); }, 30);
+  }
+
+  /* ---------- workspace ---------- */
+  function tabLabel(k, s){
+    if (k === 'diff' && s.demo) return 'Diff <span style="color:var(--accent)">3</span>';
+    if (k === 'nvim' && s.demo) return 'Neovim · layout.rs';
+    return KIND[k];
+  }
+  const openKinds = s => s.layout.panes.flatMap(p => p.tabs);
+  function renderWorkspace(){
+    const s = cur(), L = s.layout, ws = $('#ws');
+    ws.innerHTML = L.panes.map((p, i) => {
+      const avail = ORDER.filter(k => !openKinds(s).includes(k));
+      return `<section class="pane glass${i===L.focus?' focus':''}" data-pi="${i}" aria-label="Pane ${i+1}">
+        <div class="tabstrip">
+          <div class="tabs" role="tablist" aria-label="Tabs in pane ${i+1}">${p.tabs.map(k => `<div class="tab${k===p.active?' on':''}"><button class="tl" role="tab" aria-selected="${k===p.active}" data-tab="${k}">${ICON[k]}<span>${tabLabel(k, s)}</span></button>${k==='chat'?'<span style="width:8px"></span>':`<button class="x" data-close="${k}" aria-label="Close ${KIND[k]} tab">${ICON.x}</button>`}</div>`).join('')}<button class="ib addtab" data-add aria-label="Add a tab to this pane" aria-expanded="false">${ICON.plus}</button></div>
+          <div class="pacts">
+            ${L.panes.length > 1 ? `<button class="ib" data-move aria-label="Move this tab to the other pane">${ICON.move}</button>` : ''}
+            <button class="ib" data-split aria-label="Split: move this tab into a new pane">${ICON.split}</button>
+          </div>
+          <div class="addmenu" hidden role="menu">${avail.length ? avail.map(k => `<button role="menuitem" data-addk="${k}">${ICON[k]}${KIND[k]}</button>`).join('') : '<span class="none">Every tab is already open in this chat</span>'}</div>
+        </div>
+        <div class="pbody" data-body="${p.active}"></div>
+      </section>`;
+    }).join('');
+    ws.querySelectorAll('.pane').forEach(el => {
+      const i = +el.dataset.pi, p = L.panes[i];
+      RENDER[p.active](el.querySelector('.pbody'), s);
+      el.addEventListener('pointerdown', () => { if (L.focus !== i){ L.focus = i; ws.querySelectorAll('.pane').forEach(x => x.classList.toggle('focus', +x.dataset.pi === i)); } });
+      el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { p.active = b.dataset.tab; L.focus = i; renderWorkspace(); });
+      el.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeTab(s, i, b.dataset.close));
+      const add = el.querySelector('[data-add]'), menu = el.querySelector('.addmenu');
+      add.onclick = () => { const open = menu.hidden; document.querySelectorAll('.addmenu').forEach(m => m.hidden = true); document.querySelectorAll('[data-add]').forEach(x => x.setAttribute('aria-expanded','false')); menu.hidden = !open; add.setAttribute('aria-expanded', open); };
+      menu.querySelectorAll('[data-addk]').forEach(b => b.onclick = () => { p.tabs.push(b.dataset.addk); p.active = b.dataset.addk; L.focus = i; renderWorkspace(); });
+      const mv = el.querySelector('[data-move]'); if (mv) mv.onclick = () => moveTab(s, i, (i + 1) % L.panes.length);
+      el.querySelector('[data-split]').onclick = () => splitPane(s, i);
+    });
+    $('#crumb').innerHTML = `${esc(envOf(s).name)} › <b>${esc(s.title)}</b>`;
+    $('#presetTabs').setAttribute('aria-pressed', L.panes.length === 1);
+    $('#presetSplit').setAttribute('aria-pressed', L.panes.length > 1);
+  }
+  document.addEventListener('click', e => { if (!e.target.closest('.addmenu') && !e.target.closest('[data-add]')) { document.querySelectorAll('.addmenu').forEach(m => m.hidden = true); document.querySelectorAll('[data-add]').forEach(x => x.setAttribute('aria-expanded','false')); } });
+
+  function closeTab(s, i, k){
+    const p = s.layout.panes[i];
+    p.tabs = p.tabs.filter(t => t !== k);
+    if (!p.tabs.length){ s.layout.panes.splice(i, 1); s.layout.focus = Math.max(0, Math.min(s.layout.focus, s.layout.panes.length - 1)); }
+    else if (p.active === k) p.active = p.tabs[p.tabs.length - 1];
+    renderWorkspace();
+  }
+  function moveTab(s, from, to){
+    const L = s.layout, src = L.panes[from], k = src.active, dst = L.panes[to];
+    src.tabs = src.tabs.filter(t => t !== k); dst.tabs.push(k); dst.active = k;
+    if (!src.tabs.length){ L.panes.splice(from, 1); L.focus = L.panes.indexOf(dst); }
+    else { src.active = src.tabs[src.tabs.length - 1]; L.focus = to; }
+    renderWorkspace(); toast(KIND[k] + ' moved');
+  }
+  function splitPane(s, i){
+    const L = s.layout, p = L.panes[i];
+    if (L.panes.length >= 3){ toast('Three panes is the most for this sketch'); return; }
+    let k;
+    if (p.tabs.length > 1){ k = p.active; p.tabs = p.tabs.filter(t => t !== k); p.active = p.tabs[p.tabs.length - 1]; }
+    else { k = ORDER.find(x => !openKinds(s).includes(x)); if (!k){ toast('Every tab is already open'); return; } }
+    L.panes.splice(i + 1, 0, { tabs:[k], active:k }); L.focus = i + 1;
+    renderWorkspace();
+  }
+  function openTab(s, k){
+    const L = s.layout;
+    let i = L.panes.findIndex(p => p.tabs.includes(k));
+    if (i < 0){ i = L.panes.length - 1; if (L.panes.length === 1 && L.panes[0].tabs.length === 1 && !narrow()){ L.panes.push({ tabs:[k], active:k }); i = 1; } else L.panes[i].tabs.push(k); }
+    L.panes[i].active = k; L.focus = i; renderWorkspace();
+  }
+  $('#presetTabs').onclick = () => { const s = cur(), L = s.layout, act = L.panes[L.focus].active; const tabs = ORDER.filter(k => openKinds(s).includes(k)); s.layout = mkLayout([{ tabs, active:act }], 0); renderWorkspace(); };
+  $('#presetSplit').onclick = () => { const s = cur(), L = s.layout, act = L.panes[L.focus].active; let rest = ORDER.filter(k => k !== 'chat' && openKinds(s).includes(k)); if (!rest.length) rest = ['term']; s.layout = mkLayout([{ tabs:['chat'], active:'chat' }, { tabs:rest, active: rest.includes(act) ? act : rest[0] }], 1); renderWorkspace(); };
+
+  /* ---------- chat tab ---------- */
+  function msgsHTML(s){
+    if (!s.msgs.length && !s.typing) return `<div class="empty"><b>New chat in ${esc(envOf(s).name)}</b><span>Ask the agent anything about this repo. It runs in ${esc(envOf(s).where.split(' · ')[0])}.</span></div>`;
+    return s.msgs.map(m => {
+      const tools = (m.tools || []).map(t => `<div class="tool"><span class="dot"></span><span class="grow">${esc(t.label)}</span>${t.add!=null?`<span class="plus">+${t.add}</span><span class="minus">−${t.del}</span>`:''}${t.note?`<span style="color:var(--muted)">${esc(t.note)}</span>`:''}${t.open?`<button class="linkbtn" data-go="${t.open}">Open in ${KIND[t.open]}</button>`:''}</div>`).join('');
+      if (m.role === 'user') return `<div class="msg user">${m.html}</div>`;
+      return `<div class="msg"><span class="who"><i></i>Claude Code</span>${m.html}${tools}</div>`;
+    }).join('') + (s.typing ? '<div class="typing">Claude Code is working…</div>' : '');
+  }
+  function renderChat(el, s){
+    const p = s.demo ? pending().length : 0;
+    el.innerHTML = `<div class="msgs" data-msgs></div>
+      <div class="composer"><form data-form>
+        <label for="ci-${s.id}">${p ? 'Add a summary to your review (optional)' : 'Message the agent'}</label>
+        <div class="in"><span aria-hidden="true">›</span><input id="ci-${s.id}" type="text" autocomplete="off" placeholder="Ask, or reply to the agent…"></div>
+        <div class="row"><span class="pill" ${p ? '' : 'hidden'}>${p} review comment${p===1?'':'s'} attached</span><span class="grow"></span><button type="submit" class="primary">${p ? 'Send review' : 'Send'}</button></div>
+      </form></div>
+      <div class="cstat"><span><b>Opus 5.5</b></span><span>context <span class="meter"><i style="width:${s.ctx}%"></i></span> ${s.ctx}%</span><span>⎇ main</span><span>${esc(envOf(s).where.split(' · ')[1] || '')}</span></div>`;
+    const box = el.querySelector('[data-msgs]'), input = el.querySelector('input');
+    box.innerHTML = msgsHTML(s); box.scrollTop = box.scrollHeight;
+    input.value = s.draft || '';
+    input.oninput = () => s.draft = input.value;
+    el.querySelector('[data-form]').onsubmit = e => { e.preventDefault(); send(s); };
+    box.onclick = e => {
+      const go = e.target.closest('[data-go]'); if (go){ openTab(s, go.dataset.go); return; }
+      const tg = e.target.closest('[data-src-toggle]');
+      if (tg){ const b = tg.closest('.block'), src = b.querySelector('[data-src]'), dg = b.querySelector('[data-dg]'), on = src.hidden; src.hidden = !on; dg.hidden = on; tg.textContent = on ? 'Show diagram' : 'Show source'; return; }
+      const cp = e.target.closest('[data-copy]');
+      if (cp){ const txt = cp.closest('.block').querySelector('pre').innerText; try { navigator.clipboard.writeText(txt).then(() => toast('Copied'), () => toast('Copying is blocked here')); } catch(err){ toast('Copying is blocked here'); } }
+    };
+  }
+  function refresh(kind){
+    const s = cur(); document.querySelectorAll(`[data-body="${kind}"]`).forEach(el => {
+      if (kind === 'chat'){ const box = el.querySelector('[data-msgs]'); if (box){ box.innerHTML = msgsHTML(s); box.scrollTop = box.scrollHeight; } }
+      else RENDER[kind](el, s);
+    });
+  }
+  function send(s){
+    const text = (s.draft || '').trim(), p = s.demo ? pending() : [];
+    if (!text && !p.length){ const i = document.getElementById('ci-' + s.id); if (i) i.focus(); return; }
+    let html;
+    if (p.length){ html = `<p><b>Review</b> · ${p.length} comment${p.length===1?'':'s'}</p>` + p.map(c => `<div class="quote"><span class="mono">layout.rs:${c.line}</span> ${esc(c.text)}</div>`).join('') + (text ? `<p>${esc(text)}</p>` : ''); p.forEach(c => c.status = 'sent'); }
+    else html = `<p>${esc(text)}</p>`;
+    if (s.title === 'New chat' && text) s.title = text.length > 34 ? text.slice(0, 32) + '…' : text;
+    s.msgs.push({ role:'user', html }); s.draft = '';
+    renderWorkspace();
+    if (p.length){ agentReply(s, '<p>Pulled the bounds into <code>MIN_SPLIT</code> and <code>MAX_SPLIT</code>, and left a TODO where a min pane width setting would plug in.</p>', [{ label:'Edited 1 file', add:4, del:1, open:'diff' }]); toast('Review sent'); }
+    else agentReply(s, '<p>On it. Anything I change will show up in a Diff tab for you to review.</p>');
+  }
+  function agentReply(s, html, tools){
+    s.typing = true; s.status = 'working'; s.meta = 'Working…'; s.ctx = Math.min(95, s.ctx + 4);
+    renderSidebar(); if (s.id === curId) refresh('chat');
+    setTimeout(() => {
+      s.typing = false; s.msgs.push({ role:'agent', html, tools });
+      s.status = tools && tools.some(t => t.open) ? 'needs' : 'done'; s.meta = s.status === 'needs' ? 'Needs your review · now' : 'Done · just now';
+      renderSidebar(); if (s.id === curId) refresh('chat');
+    }, 1000);
+  }
+
+  /* ---------- diff tab ---------- */
+  const diff = [
+    { n:41, t:'ctx', s:'impl Workspace {' },{ n:42, t:'ctx', s:'    pub fn layout(&self, area: Rect) -> Layout {' },
+    { n:43, t:'del', s:'-        let (left, right) = area.split_h(0.5);' },{ n:43, t:'add', s:'+        let (left, right) = area.split_h(self.split);' },
+    { n:44, t:'ctx', s:'        Layout { chat: left, review: right }' },{ n:45, t:'ctx', s:'    }' },{ n:46, t:'ctx', s:' ' },
+    { n:47, t:'add', s:'+    pub fn resize_split(&mut self, delta: f32) {' },{ n:48, t:'add', s:'+        self.split = (self.split + delta).clamp(0.2, 0.8);' },
+    { n:49, t:'add', s:'+        self.dirty = true;' },{ n:50, t:'add', s:'+    }' },{ n:51, t:'ctx', s:' ' },
+    { n:52, t:'ctx', s:'    pub fn focus(&mut self, target: PaneId) {' },{ n:53, t:'ctx', s:'        self.focused = target;' }
+  ];
+  const emptyState = (title, body) => `<div class="empty"><b>${title}</b><span>${body}</span></div>`;
+  function renderDiff(el, s){
+    if (!s.demo){ el.innerHTML = emptyState('No changes yet', 'When the agent edits files in this chat, they show up here for review.'); return; }
+    const rows = diff.map(d => {
+      const cs = d.t === 'del' ? [] : demo.comments.filter(c => c.line === d.n);
+      let h = `<button class="ln ${d.t==='ctx'?'':d.t}${cs.length?' marked':''}" data-line="${d.t==='del'?'':d.n}" aria-label="Comment on line ${d.n}"><span class="num">${d.n}</span><span>${esc(d.s)}</span></button>`;
+      cs.forEach(c => { h += `<div class="cbox"><div class="meta"><b>You</b><span>line ${c.line}</span><span class="tag ${c.status==='sent'?'sent':''}">${c.status==='sent'?'sent to agent':'pending'}</span></div><div class="text">${esc(c.text)}</div></div>`; });
+      if (demo.openLine === d.n && d.t !== 'del') h += `<div class="cbox"><div class="meta"><b>New comment</b><span>line ${d.n}</span></div><label for="newComment" class="meta">What should change here?</label><textarea id="newComment" placeholder="e.g. rename this, add a test, explain why…"></textarea><div class="acts"><button class="ghost" data-act="review">Add to review</button><button class="primary" data-act="now">Send now</button><button class="ghost" data-act="cancel">Cancel</button></div></div>`;
+      return h;
+    }).join('');
+    el.innerHTML = `
+      <div class="codebar"><span style="color:var(--fg)">src/pane/layout.rs</span><span>@@ -41,9 +41,22 @@</span><span class="grow"></span><span>Tap a line to comment</span></div>
+      <div class="codebody">
+        <nav class="side" aria-label="Changed files">
+          <button class="item" aria-current="true"><span class="grow">pane/layout.rs</span><span style="color:var(--accent)">${demo.comments.length}</span></button>
+          <button class="item">input/keymap.rs</button><button class="item">session.rs</button>
+          <h3>Reviewed 0 of 3</h3>
+        </nav>
+        <div class="scroll">${rows}</div>
+      </div>
+      <div class="status"><span class="mode" style="background:var(--accent)">REVIEW</span><span>⎇ main</span><span>]c next hunk · c comment</span><span class="grow"></span><span>${pending().length} pending</span></div>`;
+    el.querySelectorAll('button.ln').forEach(b => b.onclick = () => { const n = +b.dataset.line; if (!n) return; demo.openLine = demo.openLine === n ? null : n; renderDiff(el, s); const ta = $('#newComment'); if (ta) ta.focus(); });
+    el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+      const ta = $('#newComment'), text = ta ? ta.value.trim() : '';
+      if (b.dataset.act === 'cancel'){ demo.openLine = null; renderDiff(el, s); return; }
+      if (!text){ ta.focus(); toast('Write the comment first'); return; }
+      const line = demo.openLine; demo.openLine = null;
+      if (b.dataset.act === 'review'){ demo.comments.push({ line, text, status:'pending' }); toast('Added to review'); renderWorkspace(); }
+      else { demo.comments.push({ line, text, status:'sent' }); s.msgs.push({ role:'user', html:`<div class="quote"><span class="mono">layout.rs:${line}</span> ${esc(text)}</div>` }); renderWorkspace(); agentReply(s, '<p>Good call. Updating line ' + line + ' now.</p>'); toast('Sent to agent'); }
+    });
+  }
+
+  /* ---------- code tab ---------- */
+  function renderCode(el, s){
+    if (!s.demo){ el.innerHTML = emptyState('Browse the repo', 'Open a file with the command palette, or jump to one the agent mentions.'); return; }
+    const peek = demo.peek ? `<div class="peek"><div class="head"><b>Peek definition</b><span>pane/layout.rs:42</span><span class="grow"></span><button class="linkbtn" data-jump>Jump (gd)</button><button class="linkbtn" data-closepeek>Close</button></div><div class="body">
+      <div class="ln"><span class="num">42</span><span>    <span class="k">pub fn</span> <span class="f">layout</span>(&amp;<span class="k">self</span>, area: <span class="ty">Rect</span>) -&gt; <span class="ty">Layout</span> {</span></div>
+      <div class="ln"><span class="num">43</span><span>        <span class="k">let</span> (left, right) = area.<span class="f">split_h</span>(<span class="k">self</span>.split);</span></div>
+      <div class="ln"><span class="num">44</span><span>        <span class="ty">Layout</span> { chat: left, review: right }</span></div></div></div>` : '';
+    const refs = ['render/frame.rs:118','ui/tabs.rs:77','input/mouse.rs:203'];
+    el.innerHTML = `
+      <div class="codebar"><span style="color:var(--fg)">src › ${esc(demo.loc.split(':')[0].replace('/',' › '))}</span><span class="grow"></span><span>Tap the dashed value to peek</span></div>
+      <div class="codebody">
+        <div class="scroll">
+          <div class="ln"><span class="num">72</span><span><span class="k">impl</span> <span class="ty">TabBar</span> {</span></div>
+          <div class="ln"><span class="num">73</span><span>    <span class="k">pub fn</span> <span class="f">draw</span>(&amp;<span class="k">self</span>, ws: &amp;<span class="ty">Workspace</span>, area: <span class="ty">Rect</span>) {</span></div>
+          <div class="ln"><span class="num">74</span><span>        <span class="c">// TODO: share with Workspace::layout</span></span></div>
+          <div class="ln"><span class="num">75</span><span>        <span class="k">let</span> w = area.width <span class="k">as</span> <span class="ty">f32</span>;</span></div>
+          <div class="ln"><span class="num">76</span><span> </span></div>
+          <div class="ln hl"><span class="num" style="color:var(--fg)">77</span><span>        <span class="k">let</span> split_x = area.x + (w * <button class="tok" data-tok aria-label="Peek where the split is defined"><span class="n">0.5</span></button>) <span class="k">as</span> <span class="ty">u32</span>;</span></div>
+          ${peek}
+          <div class="ln"><span class="num">78</span><span>        <span class="k">self</span>.<span class="f">draw_tabs</span>(area.<span class="f">left_of</span>(split_x));</span></div>
+          <div class="ln"><span class="num">79</span><span>        <span class="k">self</span>.<span class="f">draw_mode_switch</span>(area.<span class="f">right_of</span>(split_x));</span></div>
+          <div class="ln"><span class="num">80</span><span>    }</span></div>
+          <div class="ln"><span class="num">81</span><span>}</span></div>
+        </div>
+        <nav class="side right" aria-label="References">
+          <h3>References · layout</h3>
+          ${refs.map(r => `<button class="item" data-ref="${r}" aria-current="${r===demo.loc}">${r}</button>`).join('')}
+          <h3>Jump list</h3>
+          ${demo.jumps.slice(-4).map((j,i,a) => `<span class="item" style="${i===a.length-1?'color:var(--fg)':''}">${esc(j)}${i===a.length-1?' ←':''}</span>`).join('')}
+        </nav>
+      </div>
+      <div class="status"><span class="mode" style="background:var(--blue)">BROWSE</span><span>⎇ main</span><span>gd definition · gr references · Ctrl-o back</span><span class="grow"></span><span>${esc(demo.loc)}</span></div>`;
+    el.querySelector('[data-tok]').onclick = () => { demo.peek = !demo.peek; renderCode(el, s); };
+    const cp = el.querySelector('[data-closepeek]'); if (cp) cp.onclick = () => { demo.peek = false; renderCode(el, s); };
+    const jd = el.querySelector('[data-jump]'); if (jd) jd.onclick = () => { demo.jumps.push('pane/layout.rs:42'); toast('Jumped to pane/layout.rs:42'); renderCode(el, s); };
+    el.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => { demo.loc = b.dataset.ref; demo.jumps.push(b.dataset.ref); renderCode(el, s); });
+  }
+
+  /* ---------- neovim tab ---------- */
+  const source = `use crate::geom::Rect;
+
+const MIN_SPLIT: f32 = 0.2;
+const MAX_SPLIT: f32 = 0.8;
+
+impl Workspace {
+    pub fn layout(&self, area: Rect) -> Layout {
+        let (left, right) = area.split_h(self.split);
+        Layout { chat: left, review: right }
+    }
+
+    pub fn resize_split(&mut self, delta: f32) {
+        self.split = (self.split + delta).clamp(MIN_SPLIT, MAX_SPLIT);
+        self.dirty = true;
+    }
+}`;
+  let editText = source;
+  function renderNvim(el, s){
+    if (!s.demo){ el.innerHTML = emptyState('Neovim', 'Your own Neovim, with your config, opens here for this chat’s environment.'); return; }
+    const lines = editText.split('\n').length;
+    el.innerHTML = `
+      <div style="padding:10px 12px;border-bottom:1px solid var(--line);flex:none">
+        ${demo.handedBack
+          ? `<div class="banner" style="border-color:var(--line-2);background:rgba(255,255,255,.035)"><b style="color:var(--blue)">Agent has the file again</b><span>Your edits went over as a diff. Take it back to keep editing.</span><div><button class="ghost" data-take>Take it back</button></div></div>`
+          : `<div class="banner"><b>Agent paused on this file</b><span>You're editing layout.rs. The agent won't touch it until you hand it back.</span><div style="margin-top:6px"><button class="primary" data-hand>Hand back to agent</button></div></div>`}
+      </div>
+      <div class="editor">
+        <div class="nums" aria-hidden="true">${Array.from({length:lines},(_,i)=>i+1).join('\n')}</div>
+        <label for="editorArea" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Edit layout.rs</label>
+        <textarea id="editorArea" spellcheck="false" ${demo.handedBack?'readonly':''} rows="${lines+1}">${esc(editText)}</textarea>
+      </div>
+      <div class="status"><span class="mode" data-vim style="background:${demo.editing?'var(--green)':'var(--muted)'}">${demo.editing?'INSERT':'NORMAL'}</span><span>⎇ main</span><span>src/pane/layout.rs${editText!==source?' [+]':''}</span><span class="grow"></span><span>rust-analyzer · rust</span></div>`;
+    const ta = el.querySelector('textarea'), m = el.querySelector('[data-vim]');
+    ta.onfocus = () => { if (demo.handedBack) return; demo.editing = true; m.textContent = 'INSERT'; m.style.background = 'var(--green)'; };
+    ta.onblur = () => { demo.editing = false; m.textContent = 'NORMAL'; m.style.background = 'var(--muted)'; };
+    ta.oninput = () => { editText = ta.value; const n = editText.split('\n').length; ta.rows = n + 1; el.querySelector('.nums').textContent = Array.from({length:n},(_,i)=>i+1).join('\n'); };
+    const hb = el.querySelector('[data-hand]'); if (hb) hb.onclick = () => {
+      const changed = editText !== source; demo.handedBack = true;
+      s.msgs.push({ role:'user', html: changed ? '<p>Handed back <code>layout.rs</code> with my edits. Carry on from there.</p>' : '<p>Handed back <code>layout.rs</code>, no changes from me.</p>' });
+      renderWorkspace(); agentReply(s, changed ? '<p>Got your diff. I\'ll keep your version and build on it.</p>' : '<p>Thanks, picking it back up.</p>'); toast('Handed back to agent');
+    };
+    const tb = el.querySelector('[data-take]'); if (tb) tb.onclick = () => { demo.handedBack = false; renderNvim(el, s); };
+  }
+
+  /* ---------- terminal tab ---------- */
+  const cmds = {
+    'tay api list': ['session.list      List chats on this daemon','file.open         Open a file in a tab','review.comment    Add a comment to the current review','review.submit     Send the review to the agent','tab.open          Open a tab in a pane'],
+    'tayd status': ['tayd running · socket $XDG_RUNTIME_DIR/tay/default', () => `${sessions.length} chats · ${sessions.filter(s => s.status==='working').length} agent working`],
+    'git status': ['On branch main','Changes not staged for commit:','  <span class="n">modified:   crates/client/src/pane/layout.rs</span>','  <span class="n">modified:   crates/client/src/input/keymap.rs</span>','  <span class="n">modified:   crates/client/src/session.rs</span>'],
+    'cargo test': ['<span class="mu">    Finished test profile in 1.02s</span>','running 52 tests','test result: <span class="ok">ok</span>. 52 passed; 0 failed']
+  };
+  function renderTerm(el, s){
+    const env = envOf(s).name;
+    el.innerHTML = `<div class="term" data-term></div><form class="termin" data-tf><label for="ti-${s.id}">${env} <b>git:(main)</b> ❯</label><input id="ti-${s.id}" type="text" autocomplete="off" spellcheck="false" placeholder="try: tay api list"></form>`;
+    const t = el.querySelector('[data-term]'); t.innerHTML = s.term.join('\n'); t.scrollTop = t.scrollHeight;
+    el.querySelector('[data-tf]').onsubmit = e => {
+      e.preventDefault(); const inp = el.querySelector('input'), c = inp.value.trim(); inp.value = ''; if (!c) return;
+      if (c === 'clear'){ s.term = []; }
+      else {
+        s.term.push(P(env) + esc(c));
+        const key = Object.keys(cmds).find(k => c === k || c.startsWith(k + ' '));
+        s.term.push(...(key ? cmds[key].map(x => typeof x === 'function' ? x() : x) : ['<span class="mu">This shell is a sketch. Try: tay api list, tayd status, git status, cargo test, clear</span>']));
+      }
+      t.innerHTML = s.term.join('\n'); t.scrollTop = t.scrollHeight;
+    };
+  }
+
+  const RENDER = { chat:renderChat, diff:renderDiff, code:renderCode, nvim:renderNvim, term:renderTerm };
+
+  /* ---------- sidebar toggle ---------- */
+  function closeDrawer(){ $('#app').classList.remove('sbopen'); }
+  $('#sbToggle').onclick = () => {
+    const app = $('#app');
+    if (narrow()){ app.classList.toggle('sbopen'); $('#sbToggle').setAttribute('aria-expanded', app.classList.contains('sbopen')); }
+    else { app.classList.toggle('nosb'); $('#sbToggle').setAttribute('aria-expanded', !app.classList.contains('nosb')); }
+  };
+  $('#scrim').onclick = closeDrawer;
+
+  let tt;
+  function toast(t){ const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 1800); }
+
+  function renderAll(){ renderSidebar(); renderWorkspace(); }
+  if (narrow()) $('#sbToggle').setAttribute('aria-expanded', 'false');
+  renderAll();
+})();
+</script>
