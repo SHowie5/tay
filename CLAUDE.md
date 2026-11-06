@@ -30,6 +30,8 @@ Client/server, inspired by Superlogical's Rex:
   only for heavy streams such as Neovim screen updates.
 - **Self-describing API:** `tay api list`, `tay api describe <method>`, `tay api call <method>
   '{...}'`. Agents can drive the app through it (for example `review.open`, `tab.open`).
+- **MCP server:** `tay mcp` exposes the same API methods as MCP tools, so Claude Code, Codex and
+  other agents can drive Tay without learning the CLI. It reuses the protocol types and schemas.
 - **Remote (later):** listen on a tailnet address and trust Tailscale identity rather than
   building auth.
 
@@ -65,6 +67,10 @@ tay/
   Neovim (edit), Terminal. One pane with tabs (Claude Code desktop feel) and split panes (Rex
   feel) are the same model. The daemon stores each chat's layout.
 - **Default layout:** Chat on the left; Diff, Code, Neovim and Terminal tabbed on the right.
+- **Worktree per chat:** each chat can run in its own git worktree on its own branch, so parallel
+  chats don't collide and every chat's Diff is a clean branch to review.
+- **Permission modes per chat:** Ask for everything, Auto-accept edits, or Full access. Built on
+  ACP's permission requests, with the current mode shown in the chat's status line.
 - **Review flow:** comment on diff lines GitHub-style, send one now or batch them into a review
   sent from the chat composer. The agent's changes come back into Diff.
 - **Editing:** opening a file in Neovim pauses the agent on that file. "Hand back to agent"
@@ -86,6 +92,15 @@ tay/
 
 `docs/prototype.html` is a clickable HTML prototype of the UI and workflow. Open it in a browser
 as the visual reference. It is a sketch, not code to port.
+
+## Related apps
+
+Herdr, Orca and T3 Code cover similar ground. What makes Tay different: your real Neovim as the
+editor, modal keyboard control, edit locks with hand-back, GPU-native rendering with diagrams in
+chat, and an API whose schemas come from the Rust types. T3 Code's server and pairing design is
+worth reading before building tayd's attach and remote support.
+
+Out of scope for now: a mobile app, an embedded browser, and GitHub or Linear integrations.
 
 ## Roadmap
 

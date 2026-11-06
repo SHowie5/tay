@@ -43,7 +43,11 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] `tayd` runs Claude Code through the Agent Client Protocol
 - [ ] Stream agent messages to the client; parse markdown as it arrives
 - [ ] Render prose, lists, inline code and highlighted code blocks; tool calls as cards
-- [ ] Done when a streamed reply renders as styled markdown
+- [ ] Permission modes per chat (Ask, Auto-accept edits, Full access) using ACP permission
+      requests; approve or deny from the chat when asked
+- [ ] `tay mcp`: serve the API methods as MCP tools so agents can drive Tay
+- [ ] Done when a streamed reply renders as styled markdown and an edit waits for your approval
+      in Ask mode
 
 ## M7: Diff and review
 - [ ] Diff tab from git and from the agent's edits
@@ -54,6 +58,7 @@ milestones, and start Learn Wgpu around milestone 3.
 ## M8: Sidebar, tabs and splits
 - [ ] Environments and chats in a sidebar, with status dots
 - [ ] Panes hold tabs; split, move tabs between panes; layout saved per chat in the daemon
+- [ ] Optional git worktree per chat on its own branch; Diff shows that branch's changes
 - [ ] Dia-style connected tabs; glass blur pass
 - [ ] Done when switching chats restores each layout, including after restarting the GUI
 
@@ -62,7 +67,10 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] Fallback to the highlighted Mermaid source while rendering or on error
 
 ## Later
-- Remote environments over Tailscale
-- A git worktree per chat
+- Remote environments over Tailscale (read T3 Code's `t3 serve` and `t3 pair` first)
 - Command palette
 - Pure-Rust Mermaid flowchart layout
+
+## Not planned for now
+- Mobile app, embedded browser, GitHub or Linear integrations. Other apps cover these, and they
+  don't teach much Rust.
