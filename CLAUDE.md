@@ -100,6 +100,16 @@ editor, modal keyboard control, edit locks with hand-back, GPU-native rendering 
 chat, and an API whose schemas come from the Rust types. T3 Code's server and pairing design is
 worth reading before building tayd's attach and remote support.
 
+`docs/COMPETITORS.md` lists what users dislike about those apps and how Tay avoids it. Ground
+rules that come from it:
+- Set chat status from ACP's typed events, never by reading terminal output.
+- New chats default to Ask, and Tay applies permission modes itself so they mean the same for
+  every agent.
+- Agents driving Tay through `tay mcp` can't start agents or change permissions unless allowed.
+- Keep the app light: track idle memory and startup time.
+- One consistent, Vim-like keymap, kept in `docs/KEYMAP.md`.
+- No telemetry.
+
 Out of scope for now: a mobile app, an embedded browser, and GitHub or Linear integrations.
 
 ## Roadmap

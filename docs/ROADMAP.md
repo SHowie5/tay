@@ -26,6 +26,8 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] winit window and wgpu surface; clear to Catppuccin Crust
 - [ ] Draw rounded rectangles with a signed distance field shader (the panes)
 - [ ] Two panes with a gap; keyboard focus moves between them (`Ctrl-w h/l`)
+- [ ] Write the whole keymap as one table in `docs/KEYMAP.md` before binding more keys
+- [ ] Measure idle memory and startup time; record them and keep tracking them
 - [ ] Done when resizing the window keeps the layout correct
 
 ## M4: Text
@@ -43,9 +45,15 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] `tayd` runs Claude Code through the Agent Client Protocol
 - [ ] Stream agent messages to the client; parse markdown as it arrives
 - [ ] Render prose, lists, inline code and highlighted code blocks; tool calls as cards
+- [ ] Chat status (working, needs you, done) set from ACP's typed events, never by reading the
+      screen
 - [ ] Permission modes per chat (Ask, Auto-accept edits, Full access) using ACP permission
       requests; approve or deny from the chat when asked
-- [ ] `tay mcp`: serve the API methods as MCP tools so agents can drive Tay
+- [ ] New chats default to Ask, and Tay applies each mode itself so it means the same for every
+      agent
+- [ ] Show context and usage per chat so running several agents doesn't surprise you
+- [ ] `tay mcp`: serve the API methods as MCP tools so agents can drive Tay. It can't start
+      agents or change permission modes unless you allow it
 - [ ] Done when a streamed reply renders as styled markdown and an edit waits for your approval
       in Ask mode
 
@@ -59,6 +67,9 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] Environments and chats in a sidebar, with status dots
 - [ ] Panes hold tabs; split, move tabs between panes; layout saved per chat in the daemon
 - [ ] Optional git worktree per chat on its own branch; Diff shows that branch's changes
+- [ ] Show each worktree's disk use; offer to remove it when the chat is finished or merged
+- [ ] Sidebar line shows what each agent is doing now (current tool or step), not just a dot
+- [ ] Saved and named layouts, so a chat can open straight into an arrangement
 - [ ] Dia-style connected tabs; glass blur pass
 - [ ] Done when switching chats restores each layout, including after restarting the GUI
 
@@ -67,7 +78,9 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] Fallback to the highlighted Mermaid source while rendering or on error
 
 ## Later
-- Remote environments over Tailscale (read T3 Code's `t3 serve` and `t3 pair` first)
+- Remote environments over Tailscale (read T3 Code's `t3 serve` and `t3 pair` first). Trust
+  Tailscale identity and give paired clients only the permissions they need
+- Remote environments over plain SSH without installing anything extra, if practical
 - Command palette
 - Pure-Rust Mermaid flowchart layout
 
