@@ -60,8 +60,13 @@ milestones, and start Learn Wgpu around milestone 3.
 ## M7: Diff and review
 - [ ] Diff tab from git and from the agent's edits
 - [ ] Line comments: send now, or batch into a review sent from the composer
-- [ ] Edit locks: the agent pauses on a file you open in Neovim; "Hand back to agent"
-- [ ] Done when a full review round trip works
+- [ ] Live sync: when the agent writes a file open in Neovim with no unsaved changes, `tayd`
+      reloads the buffer immediately from the file watcher
+- [ ] Briefly highlight the lines the agent changed; "changed by agent" in the status line
+- [ ] Conflict view: if you have unsaved changes when the agent writes, show a diff with Keep
+      mine / Take agent's / Merge
+- [ ] Done when a full review round trip works, and editing a file while the agent edits it
+      never loses either side's changes
 
 ## M8: Sidebar, tabs and splits
 - [ ] Environments and chats in a sidebar, with status dots

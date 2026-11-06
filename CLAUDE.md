@@ -18,7 +18,7 @@ Client/server, inspired by Superlogical's Rex:
 
 - **`tayd` (daemon)** owns all state: agent sessions, a headless Neovim per open file, the
   repo (git status, diffs, file watching), conversation history, review comments, each chat's
-  pane layout, and edit locks (only you or the agent may write a file at once).
+  pane layout. Its file watcher keeps open Neovim buffers in sync with what the agent writes.
 - **`tay` (client)** renders and forwards input. The GUI is winit + wgpu. A CLI exists from day
   one, and a TUI or mobile client could come later on the same protocol.
 - **Start on demand:** the first `tay` command or the GUI starts `tayd`. It listens on a Unix
@@ -73,8 +73,15 @@ tay/
   ACP's permission requests, with the current mode shown in the chat's status line.
 - **Review flow:** comment on diff lines GitHub-style, send one now or batch them into a review
   sent from the chat composer. The agent's changes come back into Diff.
-- **Editing:** opening a file in Neovim pauses the agent on that file. "Hand back to agent"
-  sends your edits over as a diff.
+- **Editing alongside the agent:** no file locks. You and the agent can both work on any file.
+  - When the agent writes a file you have open with no unsaved changes, `tayd` reloads it in
+    Neovim straight away (driven by the file watcher, not by waiting for `autoread`).
+  - The lines the agent just changed are briefly highlighted, with a "changed by agent" note in
+    the status line.
+  - If you have unsaved changes when the agent writes the file, show a diff of the two versions
+    with Keep mine / Take agent's / Merge, instead of Neovim's plain "file changed" warning.
+  - Agents such as Claude Code already refuse to edit a file that changed since they read it, so
+    your saved edits aren't silently overwritten. Worktrees per chat keep separate agents apart.
 - **Keyboard:** modal and Vim-like throughout. Status lines show the mode (REVIEW, BROWSE,
   INSERT, NORMAL). `gt` for the next tab, `Ctrl-w v` to split, `Ctrl-w h/l` to move focus.
 
@@ -91,13 +98,15 @@ tay/
   JetBrains Mono.
 
 `docs/prototype.html` is a clickable HTML prototype of the UI and workflow. Open it in a browser
-as the visual reference. It is a sketch, not code to port.
+as the visual reference. It is a sketch, not code to port. Its "Agent paused on this file" and
+"Hand back to agent" banner is out of date: Tay no longer locks files.
 
 ## Related apps
 
 Herdr, Orca and T3 Code cover similar ground. What makes Tay different: your real Neovim as the
-editor, modal keyboard control, edit locks with hand-back, GPU-native rendering with diagrams in
-chat, and an API whose schemas come from the Rust types. T3 Code's server and pairing design is
+editor, kept live in sync with the agent's edits; modal keyboard control; code review at the
+centre; GPU-native rendering with diagrams in chat; and an API whose schemas come from the Rust
+types. T3 Code's server and pairing design is
 worth reading before building tayd's attach and remote support.
 
 `docs/COMPETITORS.md` lists what users dislike about those apps and how Tay avoids it. Ground
