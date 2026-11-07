@@ -53,6 +53,9 @@ tay/
 - Agents: Zed's Agent Client Protocol (ACP) to wrap Claude Code, Codex, OpenCode and others.
   Tay doesn't build its own agent and must stay model-agnostic.
 - GUI: `winit`, `wgpu`, `cosmic-text` (and glyphon for the glyph atlas)
+- Terminal tab: use **libghostty**, Ghostty's embeddable terminal core, rather than writing a
+  terminal emulator. It's a Zig library with a C API, so Tay calls it through Rust FFI. Check its
+  current API and stability when this work starts.
 - Markdown: `pulldown-cmark` or `comrak` (GitHub tables), `syntect` or tree-sitter for code
 - Diagrams: the daemon renders Mermaid with `mmdc` to SVG, rasterises with `resvg` and caches by
   hash. Show the Mermaid source as a fallback. Pure-Rust layout (for example `layout-rs`) is a

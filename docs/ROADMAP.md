@@ -82,6 +82,15 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] `tayd` renders Mermaid blocks with `mmdc` to SVG, `resvg` to an image, cached by hash
 - [ ] Fallback to the highlighted Mermaid source while rendering or on error
 
+## M10: Terminal tab
+- [ ] Use libghostty (Ghostty's embeddable terminal core) instead of writing a terminal
+      emulator. It's a Zig library with a C API: bind it from Rust with FFI (bindgen or hand-written
+      `extern "C"` declarations)
+- [ ] Check libghostty's current API, stability and licence before starting
+- [ ] The terminal runs in `tayd` (so it survives the GUI closing); the client renders its screen
+- [ ] Opens in the chat's environment folder or worktree
+- [ ] Done when you can run a shell, `cargo test` and Neovim inside a Terminal tab
+
 ## Later
 - Remote environments over Tailscale (read T3 Code's `t3 serve` and `t3 pair` first). Trust
   Tailscale identity and give paired clients only the permissions they need
