@@ -24,8 +24,9 @@ milestones, and start Learn Wgpu around milestone 3.
 
 ## M3: First window
 - [ ] winit window and wgpu surface; clear to Catppuccin Crust
-- [ ] Draw rounded rectangles with a signed distance field shader (the panes)
-- [ ] Two panes with a gap; keyboard focus moves between them (`Ctrl-w h/l`)
+- [ ] Draw rounded rectangles with a signed distance field shader (the widget frames)
+- [ ] Define the `Widget` trait and a layout tree (split, tab stack, widget); two placeholder
+      widgets side by side with a gap; keyboard focus moves between them (`Ctrl-w h/l`)
 - [ ] Write the whole keymap as one table in `docs/KEYMAP.md` before binding more keys
 - [ ] Measure idle memory and startup time; record them and keep tracking them
 - [ ] Done when resizing the window keeps the layout correct
@@ -36,7 +37,7 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] Syntax highlighting with syntect or tree-sitter
 - [ ] Done when a 5,000-line file scrolls without dropped frames
 
-## M5: Neovim pane
+## M5: Neovim widget
 - [ ] Client renders the Neovim grid from the daemon (cursor, highlights, mode)
 - [ ] Forward keys to Neovim; your config loads
 - [ ] Done when you can edit and save a file with your normal Neovim setup inside Tay
@@ -58,7 +59,7 @@ milestones, and start Learn Wgpu around milestone 3.
       in Ask mode
 
 ## M7: Diff and review
-- [ ] Diff tab from git and from the agent's edits
+- [ ] Diff widget from git and from the agent's edits
 - [ ] Line comments: send now, or batch into a review sent from the composer
 - [ ] Live sync: when the agent writes a file open in Neovim with no unsaved changes, `tayd`
       reloads the buffer immediately from the file watcher
@@ -68,13 +69,17 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] Done when a full review round trip works, and editing a file while the agent edits it
       never loses either side's changes
 
-## M8: Sidebar, tabs and splits
+## M8: Sidebar and customisable widgets
 - [ ] Environments and chats in a sidebar, with status dots
-- [ ] Panes hold tabs; split, move tabs between panes; layout saved per chat in the daemon
+- [ ] Add and remove widgets with a keyboard widget picker; several of one kind allowed
+- [ ] Move widgets by dragging (snapping into slots) and with `Ctrl-w H/J/K/L`; resize splits
+- [ ] Stack widgets as tabs within a slot
+- [ ] Layout tree saved per chat in the daemon; built-in Review, Chat and Edit presets
+- [ ] Optional `.tay/workspace.toml` in the repo for a project's default layout
 - [ ] Optional git worktree per chat on its own branch; Diff shows that branch's changes
 - [ ] Show each worktree's disk use; offer to remove it when the chat is finished or merged
 - [ ] Sidebar line shows what each agent is doing now (current tool or step), not just a dot
-- [ ] Saved and named layouts, so a chat can open straight into an arrangement
+- [ ] Saved and named layouts of your own, so a chat can open straight into an arrangement
 - [ ] Dia-style connected tabs; glass blur pass
 - [ ] Done when switching chats restores each layout, including after restarting the GUI
 
@@ -82,16 +87,21 @@ milestones, and start Learn Wgpu around milestone 3.
 - [ ] `tayd` renders Mermaid blocks with `mmdc` to SVG, `resvg` to an image, cached by hash
 - [ ] Fallback to the highlighted Mermaid source while rendering or on error
 
-## M10: Terminal tab
+## M10: Terminal widget
 - [ ] Use libghostty (Ghostty's embeddable terminal core) instead of writing a terminal
       emulator. It's a Zig library with a C API: bind it from Rust with FFI (bindgen or hand-written
       `extern "C"` declarations)
 - [ ] Check libghostty's current API, stability and licence before starting
 - [ ] The terminal runs in `tayd` (so it survives the GUI closing); the client renders its screen
 - [ ] Opens in the chat's environment folder or worktree
-- [ ] Done when you can run a shell, `cargo test` and Neovim inside a Terminal tab
+- [ ] Done when you can run a shell, `cargo test` and Neovim inside a Terminal widget
+
+## M11: More widgets
+- [ ] Agent plan or to-do list, test results, git log, file tree, usage meter, all-agents status
+- [ ] Each one is a small `Widget` implementation fed by daemon events
 
 ## Later
+- Third-party widgets, for example compiled to WebAssembly and loaded at runtime
 - Remote environments over Tailscale (read T3 Code's `t3 serve` and `t3 pair` first). Trust
   Tailscale identity and give paired clients only the permissions they need
 - Remote environments over plain SSH without installing anything extra, if practical
