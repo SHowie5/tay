@@ -117,9 +117,9 @@ tay/
   JetBrains Mono.
 
 `docs/prototype.html` is a clickable HTML prototype of the UI and workflow. Open it in a browser
-as the visual reference. It is a sketch, not code to port. It predates the widget model: its
-panes with tabs show the default layout, not the full add, remove and move behaviour. Its "Agent paused on this file" and
-"Hand back to agent" banner is out of date: Tay no longer locks files.
+as the visual reference for the widget workspace (presets, docking, tab stacks, resizing), live
+sync and the conflict choice in the Neovim widget, and the small widgets. It is a sketch, not
+code to port.
 
 ## Related apps
 
